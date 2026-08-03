@@ -263,6 +263,9 @@ class App:
         )
         if not filepath:
             return
+        self.view.set_loading_state(True)
+        self.view.set_status("正在读取文件…")
+        self.root.update_idletasks()
         try:
             df, enc = read_data_file(filepath)
             df = df.reset_index(drop=True)
@@ -289,7 +292,10 @@ class App:
             self.view.set_status("已载入文件")
             self.view.set_idle_state(True)
         except (RuntimeError, ValueError, OSError) as exc:
+            self.view.set_status("载入失败")
             messagebox.showerror("错误", f"载入文件失败：\n{exc}")
+        finally:
+            self.view.set_loading_state(False)
 
     def _load_prompt_config(self) -> None:
         if self.run_state.is_running:

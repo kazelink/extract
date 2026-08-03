@@ -614,6 +614,28 @@ class AppView:
 
         self.ui(_apply)
 
+    def set_loading_state(self, loading: bool) -> None:
+        """读取大文件期间禁用交互，避免界面停在「就绪」看起来像卡死。"""
+        def _apply() -> None:
+            if loading:
+                for widget in (self.btn_open, self.btn_filter_toggle, self.btn_insert_col,
+                               self.btn_load_prompt, self.btn_save_prompt):
+                    widget.config(state=tk.DISABLED)
+                self.delay_entry.config(state=tk.DISABLED)
+                self.model_cb.config(state=tk.DISABLED)
+                self.output_col_cb.config(state=tk.DISABLED)
+                self.filter_join_cb.config(state=tk.DISABLED)
+                for button in (self.btn_filter, self.btn_filter_reset):
+                    button.config(state=tk.DISABLED)
+                for row in self._filter_rows:
+                    row.set_enabled(False)
+                self.prompt_editor.set_enabled(False)
+                self.run_button.set_states(False, False)
+            else:
+                self.set_idle_state(self._file_loaded)
+
+        self.ui(_apply)
+
     def set_stop_pending(self) -> None:
         def _apply() -> None:
             self.run_button.set_main("停止中…", kind="danger")
@@ -887,12 +909,22 @@ class AppView:
             self._log_flush_scheduled = False
         if not pending and not dropped:
             return
+        follow = self._is_at_bottom(self.system_log)
         if dropped:
             self.system_log.insert(tk.END, f"[日志过多，已丢弃 {dropped} 段旧内容]\n", "error")
         for tag, chunk in _merge_runs(pending):
             self.system_log.insert(tk.END, chunk, tag)
         self._trim(self.system_log, self.MAX_LOG_LINES)
-        self.system_log.see(tk.END)
+        if follow:
+            self.system_log.yview_moveto(1.0)
+
+    @staticmethod
+    def _is_at_bottom(widget) -> bool:
+        """滚动条已在最底部时才自动跟随，用户上翻时不打断阅读。"""
+        try:
+            return widget.yview()[1] >= 0.999
+        except tk.TclError:
+            return True
 
     def _copy_output(self) -> None:
         text = self.output_log.get("1.0", "end-1c")
