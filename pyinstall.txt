@@ -1,0 +1,8 @@
+.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean --onefile --windowed --icon app.ico --add-data "app.ico;." main.py
+
+图标：app.ico 由 表格.png 生成（补成正方形后导出 16/24/32/48/64/128/256 七种尺寸）。
+  --icon      决定 exe 文件本身在资源管理器里的图标
+  --add-data  把图标打进包里，供运行时 iconbitmap 设置标题栏/任务栏图标
+
+打包后需把 config.local.json 放在 main.exe 同目录下（程序不再把配置打进 exe）。
+分享给别人时只给 main.exe + config.example.json，让对方改名成 config.local.json 并填自己的 API Key。

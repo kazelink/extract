@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Build outputs
+build/
+dist/
+
+# Local logs and temp files
+*.log
+.tmp_*
+.tmp_config_*
+
+# Local config (secrets)
+config.local.json
+.env
+.env.*
+
+# OS / Editor
+.DS_Store
+Thumbs.db

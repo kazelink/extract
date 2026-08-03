@@ -1,0 +1,61 @@
+{
+  "API_KEYS": {
+    "nvidia": "your-nvidia-api-key",
+    "deepseek": "your-deepseek-api-key"
+  },
+  "DEFAULT_MODEL_ID": "openai/gpt-oss-120b",
+  "PROMPT": "",
+  "LLM_TIMEOUT": 150,
+  "MODELS": [
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "label": "GPT-OSS-120B",
+      "sdk": "openai",
+      "api_key_name": "nvidia",
+      "api_url": "https://integrate.api.nvidia.com/v1",
+      "supports_images": false,
+      "max_tokens": 128000,
+      "temperature": 0.1,
+      "top_p": 1.0,
+      "extra_params": {
+        "reasoning_effort": "high"
+      }
+    },
+    {
+      "model_id": "deepseek-v4-pro",
+      "label": "DeepSeek V4 Pro",
+      "sdk": "openai",
+      "api_key_name": "deepseek",
+      "api_url": "https://api.deepseek.com",
+      "supports_images": false,
+      "temperature": 0.1,
+      "top_p": 1.0,
+      "extra_params": {
+        "reasoning_effort": "high",
+        "extra_body": {
+          "thinking": {
+            "type": "enabled"
+          }
+        }
+      }
+    },
+    {
+      "model_id": "deepseek-v4-flash",
+      "label": "DeepSeek V4 Flash",
+      "sdk": "openai",
+      "api_key_name": "deepseek",
+      "api_url": "https://api.deepseek.com",
+      "supports_images": false,
+      "temperature": 0.1,
+      "top_p": 1.0,
+      "extra_params": {
+        "reasoning_effort": "high",
+        "extra_body": {
+          "thinking": {
+            "type": "enabled"
+          }
+        }
+      }
+    }
+  ]
+}
