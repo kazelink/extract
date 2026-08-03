@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 from dataclasses import dataclass
+from tkinter import font as tkfont
 from tkinter import ttk
 from typing import Callable
 
@@ -788,18 +789,63 @@ class AppView:
                 return
             title = str(headings[position])
             value = str(values[position])
-        self._show_cell_dialog(title, value)
+        self._show_cell_dialog(title, value, event.x_root, event.y_root)
 
-    def _show_cell_dialog(self, title: str, value: str) -> None:
+    def _show_cell_dialog(self, title: str, value: str, x: int | None = None, y: int | None = None) -> None:
         top = tk.Toplevel(self.root)
         top.title(f"{title} — 完整内容")
-        top.geometry("620x420")
         top.configure(bg=COLORS["surface"])
         top.transient(self.root)
+        top.withdraw()
         frame, text = make_text_view(top, font=FONTS["mono"], background=COLORS["code_bg"], foreground=COLORS["text"])
         frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         text.insert("1.0", value)
         FlatButton(top, text="关闭", command=top.destroy, kind="primary", padx=16, pady=5).pack(pady=(0, 10))
+        self._fit_dialog(top, text, value, x, y)
+
+    def _fit_dialog(
+        self, top: tk.Toplevel, text: tk.Text, value: str, x: int | None = None, y: int | None = None
+    ) -> None:
+        """按内容自适应弹窗宽高：短内容小窗、长内容封顶，避免固定尺寸留大片空白。"""
+        try:
+            font = tkfont.Font(font=FONTS["mono"])
+            line_h = font.metrics("linespace")
+        except tk.TclError:
+            font = None
+            line_h = 16
+        screen_w = top.winfo_screenwidth()
+        screen_h = top.winfo_screenheight()
+        max_w = min(screen_w - 80, 1000)
+        max_h = max(130, screen_h - 120)
+        min_w, min_h = 280, 130
+        if x is None or y is None:
+            pos = ""
+        else:
+            pos_x = max(16, min(x + 12, screen_w - 16 - min_w))
+            pos_y = max(16, min(y + 12, screen_h - 16 - min_h))
+            pos = f"+{pos_x}+{pos_y}"
+
+        longest = max(value.splitlines() or [""], key=len)
+        try:
+            line_px = font.measure(longest[:2000]) if font else len(longest) * 8
+        except tk.TclError:
+            line_px = len(longest) * 8
+        width = max(min_w, min(int(line_px) + 58, max_w))
+
+        # 隐藏期间无法计算真实折行，先按物理行数估算，映射后再校正
+        chrome = 12 + 20 + 28 + 10 + 31
+        height = max(min_h, min(int((value.count("\n") + 1) * line_h + chrome), max_h))
+        top.geometry(f"{width}x{height}{pos}")
+        top.deiconify()
+        self.root.update()
+        if line_px > width - 58:
+            try:
+                counted = text.count("1.0", tk.END, "displaylines")
+                lines = counted[0] if isinstance(counted, tuple) else counted
+            except tk.TclError:
+                return
+            height = max(min_h, min(int(lines * line_h + chrome), max_h))
+            top.geometry(f"{width}x{height}{pos}")
 
     def show_output_text(self, text: str) -> None:
         def _apply() -> None:
