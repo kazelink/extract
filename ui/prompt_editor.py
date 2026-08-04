@@ -85,7 +85,6 @@ class PromptEditor(ttk.Frame):
         self.text.bind("<<Undo>>", self._schedule_refresh)
         self.text.bind("<<Redo>>", self._schedule_refresh)
         self.text.bind("<Double-1>", self._on_double_click)
-        self.text.bind("<braceleft>", self._on_brace)
 
         # 只在引用了不存在的列时才出现
         self.bar = tk.Frame(self, bg=COLORS["surface"])
@@ -243,25 +242,6 @@ class PromptEditor(ttk.Frame):
             menu.tk_popup(x, y)
         finally:
             menu.grab_release()
-
-    def _popup_at_cursor(self, _event=None) -> str:
-        if not self._enabled:
-            return "break"
-        bbox = self.text.bbox(tk.INSERT)
-        if bbox:
-            x = self.text.winfo_rootx() + bbox[0]
-            y = self.text.winfo_rooty() + bbox[1] + bbox[3]
-        else:
-            x, y = self.text.winfo_rootx(), self.text.winfo_rooty()
-        self._popup_menu_at(x, y)
-        return "break"
-
-    def _on_brace(self, _event=None) -> None:
-        # 连打两个 "{" 时直接弹出列名菜单
-        if not self._enabled:
-            return
-        if self.text.get("insert-1c", "insert") == "{":
-            self.after(1, self._popup_at_cursor)
 
     def _on_double_click(self, event) -> str | None:
         """双击胶囊时整体选中，让 `{{列名}}` 像一个不可分割的单元。"""
