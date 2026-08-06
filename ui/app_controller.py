@@ -400,6 +400,7 @@ class App:
 
     def _on_model_change(self, *_args) -> None:
         self.model_id = self.view.get_model_id()
+        self.view.update_reasoning_for_model(self.model_id)
 
     def _on_prompt_parts_change(self, *_args) -> None:
         self.input_cols = self.view.get_input_columns()
@@ -444,6 +445,7 @@ class App:
             input_cols=self.input_cols,
             output_col=self.output_col,
             model_id=self.model_id,
+            reasoning_effort=self.view.get_reasoning_effort(),
         )
 
     def _validate_columns(self, run_config: RunConfig) -> bool:
@@ -548,6 +550,7 @@ class App:
             input_cols=[],
             output_col="",
             model_id=self.view.get_model_id(),
+            reasoning_effort=self.view.get_reasoning_effort(),
         )
         try:
             validate_run_config(run_config)

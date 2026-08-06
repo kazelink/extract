@@ -35,6 +35,7 @@ class BaseProvider(ABC):
         on_stream: Optional[Callable] = None,
         on_reasoning: Optional[Callable] = None,
         should_stop: Optional[Callable[[], bool]] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> str | tuple[str, str]:
         ...
 
@@ -81,6 +82,7 @@ class OpenAICompatibleProvider(BaseProvider):
         on_stream: Optional[Callable] = None,
         on_reasoning: Optional[Callable] = None,
         should_stop: Optional[Callable[[], bool]] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> str | tuple[str, str]:
         api_key_name = spec.api_key_name or spec.sdk
         api_key = config.get_api_key(api_key_name)
@@ -106,6 +108,8 @@ class OpenAICompatibleProvider(BaseProvider):
         if spec.extra_params:
             for key, value in spec.extra_params.items():
                 params.setdefault(key, value)
+        if reasoning_effort:
+            params["reasoning_effort"] = reasoning_effort
 
         if on_stream:
             params["stream"] = True
@@ -183,6 +187,7 @@ class LLMClient:
         on_stream: Optional[Callable] = None,
         on_reasoning: Optional[Callable] = None,
         should_stop: Optional[Callable[[], bool]] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> str | tuple[str, str]:
         spec = get_model_spec(model_id)
         provider = self._providers.get(spec.sdk)
@@ -191,4 +196,11 @@ class LLMClient:
             raise RuntimeError(
                 f"不支持的 SDK：{spec.sdk!r}。已注册的 SDK：{supported}。"
             )
-        return provider.ask(prompt, spec, on_stream, on_reasoning, should_stop)
+        return provider.ask(
+            prompt,
+            spec,
+            on_stream=on_stream,
+            on_reasoning=on_reasoning,
+            should_stop=should_stop,
+            reasoning_effort=reasoning_effort,
+        )

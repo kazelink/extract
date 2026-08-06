@@ -199,6 +199,13 @@ class AppView:
             used_labels.add(label)
             self._model_labels.append(label)
             self._model_label_to_id[label] = spec.model_id
+        self._model_reasoning_options: dict[str, list[str]] = {}
+        self._model_reasoning_default: dict[str, str] = {}
+        for spec in model_specs:
+            self._model_reasoning_options[spec.model_id] = list(spec.reasoning_effort_options)
+            effort = (spec.extra_params or {}).get("reasoning_effort")
+            if effort:
+                self._model_reasoning_default[spec.model_id] = str(effort)
 
         # 窗口已被 run() 隐藏，这里再叠一层透明度，避免个别环境 deiconify 后仍有一帧空白
         self._revealed = False
@@ -473,6 +480,15 @@ class AppView:
             panel.actions, textvariable=self.model_var, values=labels, state="readonly", width=26
         )
         self.model_cb.pack(side=tk.LEFT)
+        tk.Label(
+            panel.actions, text="推理", font=FONTS["small"], fg=COLORS["text_muted"], bg=COLORS["surface"]
+        ).pack(side=tk.LEFT, padx=(8, 4))
+        self.reasoning_var = tk.StringVar()
+        self.reasoning_cb = ttk.Combobox(
+            panel.actions, textvariable=self.reasoning_var, values=[], state="readonly", width=8
+        )
+        self.reasoning_cb.pack(side=tk.LEFT)
+        self.update_reasoning_for_model(default_model_id)
         panel.add_action("复制", self._copy_output)
 
         frame, self.output_log = make_text_view(
@@ -583,6 +599,7 @@ class AppView:
             self.delay_entry.config(state=tk.NORMAL)
             self.btn_filter_toggle.config(state=tk.NORMAL if file_loaded else tk.DISABLED)
             self.model_cb.config(state="readonly")
+            self.reasoning_cb.config(state="readonly")
             # normal 而非 readonly：允许直接敲一个新列名
             self.output_col_cb.config(state="normal" if file_loaded else tk.DISABLED)
             self.filter_join_cb.config(state="readonly" if file_loaded else tk.DISABLED)
@@ -604,6 +621,7 @@ class AppView:
                 widget.config(state=tk.DISABLED)
             self.delay_entry.config(state=tk.DISABLED)
             self.model_cb.config(state=tk.DISABLED)
+            self.reasoning_cb.config(state=tk.DISABLED)
             self.output_col_cb.config(state=tk.DISABLED)
             self.filter_join_cb.config(state=tk.DISABLED)
             for button in (self.btn_filter, self.btn_filter_reset):
@@ -624,6 +642,7 @@ class AppView:
                     widget.config(state=tk.DISABLED)
                 self.delay_entry.config(state=tk.DISABLED)
                 self.model_cb.config(state=tk.DISABLED)
+                self.reasoning_cb.config(state=tk.DISABLED)
                 self.output_col_cb.config(state=tk.DISABLED)
                 self.filter_join_cb.config(state=tk.DISABLED)
                 for button in (self.btn_filter, self.btn_filter_reset):
@@ -661,6 +680,19 @@ class AppView:
 
     def get_model_id(self) -> str:
         return self._model_label_to_id.get(self.model_var.get(), DEFAULT_MODEL_ID)
+
+    def get_reasoning_effort(self) -> str:
+        return self.reasoning_var.get().strip()
+
+    def update_reasoning_for_model(self, model_id: str) -> None:
+        """模型切换时刷新可选的推理强度，保留仍在选项里的当前选择。"""
+        options = list(self._model_reasoning_options.get(model_id) or [])
+        fallback = self._model_reasoning_default.get(model_id, "")
+        current = self.reasoning_var.get()
+        if current not in options:
+            current = fallback if fallback in options else (options[0] if options else "")
+        self.reasoning_cb.config(values=options)
+        self.reasoning_var.set(current)
 
     def get_row_delay(self) -> float:
         """行间停顿秒数；非法输入按 0（不停顿）处理。"""

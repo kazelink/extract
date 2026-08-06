@@ -17,6 +17,7 @@ class ModelSpec:
     temperature: float | None = None
     top_p: float | None = None
     extra_params: dict[str, Any] = field(default_factory=dict)
+    reasoning_effort_options: list[str] = field(default_factory=list)
 
 
 def _as_non_empty_str(value: Any, default: str = "") -> str:
@@ -61,6 +62,12 @@ def _as_extra_params(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _as_str_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(v).strip() for v in value if str(v).strip()]
+
+
 def _parse_model_entry(index: int, item: Any) -> tuple[ModelSpec | None, str | None]:
     prefix = f"MODELS[{index}]"
     if not isinstance(item, dict):
@@ -82,6 +89,7 @@ def _parse_model_entry(index: int, item: Any) -> tuple[ModelSpec | None, str | N
         temperature=_as_optional_float(item.get("temperature")),
         top_p=_as_optional_float(item.get("top_p")),
         extra_params=_as_extra_params(item.get("extra_params")),
+        reasoning_effort_options=_as_str_list(item.get("reasoning_effort_options")),
     )
     return spec, None
 

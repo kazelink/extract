@@ -33,6 +33,7 @@ class RunConfig:
     input_cols: list[str] = field(default_factory=list)
     output_col: str = ""
     model_id: str = ""
+    reasoning_effort: str = ""
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,7 @@ def process_input_value(
             on_stream=on_stream,
             on_reasoning=on_reasoning,
             should_stop=should_stop,
+            reasoning_effort=run_config.reasoning_effort,
         )
     except RequestCancelledError:
         raise
