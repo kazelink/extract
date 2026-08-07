@@ -75,15 +75,12 @@ class _FilterRow:
             disabledbackground=COLORS["bg"],
         )
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self.entry.bind("<Return>", lambda _e: owner._fire_filter())
         self.sync_entry_state()
 
     def _on_cond_change(self, _event=None) -> None:
         self.sync_entry_state()
         if self.condition() in _TEXT_CONDITIONS:
             self.entry.focus_set()
-        else:
-            self._owner._fire_filter()  # 非空/为空 不需要输入，选完直接生效
 
     def _add(self) -> None:
         self._owner.add_filter_row(after=self)
@@ -334,7 +331,6 @@ class AppView:
             width=9,
         )
         self.filter_join_cb.pack(side=tk.LEFT, padx=(6, 0))
-        self.filter_join_cb.bind("<<ComboboxSelected>>", lambda _e: self._fire_filter())
 
         self.btn_filter_reset = FlatButton(foot, text="重置", command=self._fire_filter_reset, padx=9, pady=2)
         self.btn_filter_reset.pack(side=tk.RIGHT)
@@ -368,7 +364,7 @@ class AppView:
         row.destroy()
         self._sync_filter_row_buttons()
         # 不在这里重跑筛选：全表扫描 + 重建表格会让删除明显卡顿，
-        # 而且加条件时也不会立即生效，交给「筛选」按钮或回车统一应用
+        # 而且加条件时也不会立即生效，交给「筛选」按钮统一应用
 
     def _sync_filter_row_buttons(self) -> None:
         single = len(self._filter_rows) <= 1
