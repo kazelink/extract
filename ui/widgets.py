@@ -1,4 +1,3 @@
-"""通用小组件：扁平按钮、分体按钮、卡片面板、只读文本视图。"""
 
 from __future__ import annotations
 
@@ -33,7 +32,6 @@ def make_menu(parent) -> tk.Menu:
 
 
 class FlatButton(tk.Button):
-    """无边框按钮。kind='ghost' 时与父级底色融为一体，仅在悬停时浮出。"""
 
     def __init__(
         self,
@@ -154,10 +152,6 @@ class SplitButton(tk.Frame):
 
 
 class Panel(tk.Frame):
-    """带 1px 描边的卡片：顶部标题 + 操作区，下方内容区。
-
-    title 为空时只显示 subtitle；actions_first=True 时按钮靠左，状态文字甩到最右。
-    """
 
     def __init__(self, master, title: str, actions_first: bool = False) -> None:
         super().__init__(
@@ -231,7 +225,6 @@ class Panel(tk.Frame):
 
 
 def make_text_view(parent, *, font: tuple, background: str, foreground: str):
-    """返回 (容器, Text)。自带细滚动条，只读但可选中复制。"""
     frame = tk.Frame(parent, bg=background)
     frame.columnconfigure(0, weight=1)
     frame.rowconfigure(0, weight=1)

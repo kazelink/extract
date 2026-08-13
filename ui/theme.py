@@ -1,4 +1,3 @@
-"""集中管理配色、字体与 ttk 样式。改这里即可全局换肤。"""
 
 from __future__ import annotations
 
@@ -7,34 +6,32 @@ from tkinter import font as tkfont, ttk
 
 
 COLORS = {
-    # 取自 Windows 11 Fluent（计算器 / 记事本 / 设置）的浅色系统色
-    "bg": "#f3f3f3",           # 窗口底色（计算器主体）
-    "surface": "#ffffff",      # 卡片、记事本编辑区
-    "surface_alt": "#f9f9f9",  # 表头、斑马纹（LayerFillColorDefault）
-    "border": "#e5e5e5",       # ControlStrokeColorDefault
+    "bg": "#f3f3f3",
+    "surface": "#ffffff",
+    "surface_alt": "#f9f9f9",
+    "border": "#e5e5e5",
     "border_strong": "#c4c4c4",
-    "text": "#000000",         # 正文纯黑（记事本）
-    "text_muted": "#404040",   # 次要文字
-    "text_faint": "#707070",   # 占位、禁用
-    "accent": "#005fb8",       # Windows 11 强调蓝 AccentFillColorDefault
+    "text": "#000000",
+    "text_muted": "#404040",
+    "text_faint": "#707070",
+    "accent": "#005fb8",
     "accent_hover": "#1a6ebe",
     "accent_active": "#00457e",
-    "accent_soft": "#e5f1fb",  # 经典资源管理器悬停蓝
+    "accent_soft": "#e5f1fb",
     "on_accent": "#ffffff",
-    "danger": "#c42b1c",       # SystemFillColorCritical
+    "danger": "#c42b1c",
     "danger_hover": "#b12a1b",
     "danger_active": "#8e2116",
     "danger_soft": "#fdf3f2",
-    "success": "#0f7b0f",      # SystemFillColorSuccess
-    "hover": "#f0f0f0",        # SubtleFillColorSecondary
-    "row_selected": "#cce8ff", # 经典 Windows 列表选中蓝
+    "success": "#0f7b0f",
+    "hover": "#f0f0f0",
+    "row_selected": "#cce8ff",
     "row_ok": "#f2f8f2",
     "row_failed": "#fdf3f2",
     "row_running": "#eff6fc",
-    "code_bg": "#ffffff",      # 记事本纯白
+    "code_bg": "#ffffff",
 }
 
-# setup_theme() 之后填充
 FONTS: dict[str, tuple] = {}
 
 _UI_FAMILIES = ("Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", "PingFang SC", "Noto Sans CJK SC")
@@ -50,7 +47,6 @@ def _pick_family(available: set[str], candidates: tuple[str, ...], fallback: str
 
 
 def enable_dpi_awareness() -> None:
-    """Windows 高分屏下避免整体发虚。非 Windows 平台静默跳过。"""
     try:
         from ctypes import windll
     except ImportError:
@@ -122,7 +118,6 @@ def _configure_combobox(style: ttk.Style, root: tk.Misc) -> None:
         foreground=COLORS["text"],
         arrowcolor=COLORS["text_muted"],
     )
-    # readonly 下把 selectbackground 设成底色，去掉选中后的蓝色高亮
     style.map(
         "TCombobox",
         fieldbackground=[("readonly", COLORS["surface"]), ("disabled", COLORS["bg"])],

@@ -16,10 +16,6 @@ PLACEHOLDER_RE = re.compile(r"\{\{(.+?)\}\}")
 
 
 class PromptEditor(ttk.Frame):
-    """自由书写的编辑器：正文直接写，`{{列名}}` 渲染成内联变量胶囊。
-
-    对外仍以 prompt_parts（text / column 交替）序列化，兼容旧版 JSON 配置。
-    """
 
     REFRESH_DELAY_MS = 180
 
@@ -63,7 +59,6 @@ class PromptEditor(ttk.Frame):
         ybar.grid(row=0, column=1, sticky="ns")
         self.text.configure(yscrollcommand=ybar.set)
 
-        # 变量胶囊：合法列蓝底，未知列红底
         self.text.tag_configure(
             "chip",
             background=COLORS["accent_soft"],
@@ -86,7 +81,6 @@ class PromptEditor(ttk.Frame):
         self.text.bind("<<Redo>>", self._schedule_refresh)
         self.text.bind("<Double-1>", self._on_double_click)
 
-        # 只在引用了不存在的列时才出现
         self.bar = tk.Frame(self, bg=COLORS["surface"])
         self.bar.grid(row=1, column=0, sticky="ew")
         tk.Frame(self.bar, bg=COLORS["border"], height=1).pack(fill=tk.X)
@@ -244,7 +238,6 @@ class PromptEditor(ttk.Frame):
             menu.grab_release()
 
     def _on_double_click(self, event) -> str | None:
-        """双击胶囊时整体选中，让 `{{列名}}` 像一个不可分割的单元。"""
         index = self.text.index(f"@{event.x},{event.y}")
         for tag in ("chip", "chip_bad"):
             ranges = self.text.tag_ranges(tag)

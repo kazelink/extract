@@ -11,12 +11,11 @@ from .models import ModelSpec, get_model_spec
 
 
 class RequestCancelledError(RuntimeError):
-    """用户请求停止时抛出：不重试、不写入结果。"""
+    pass
 
 
 @dataclass(frozen=True)
 class ProviderInfo:
-    """新增 SDK 只需写一个 provider 类并 register_provider()，核心代码不做分支。"""
 
     name: str
     requires_api_url: bool = False

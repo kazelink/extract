@@ -23,14 +23,13 @@ _ENCODINGS = ["utf-8-sig", "utf-8", "gb18030", "gbk"]
 _MODERN_EXCEL_EXTS = {".xlsx", ".xlsm"}
 _LEGACY_EXCEL_EXTS = {".xls"}
 _EXCEL_EXTS = _MODERN_EXCEL_EXTS | _LEGACY_EXCEL_EXTS
-_READ_EXCEPTIONS = (ValueError, OSError)  # UnicodeDecodeError / ParserError 均属 ValueError
+_READ_EXCEPTIONS = (ValueError, OSError)
 _WRITE_EXCEPTIONS = (OSError, ValueError, ImportError)
 _XLS_MAX_ROWS = 65536
 _XLS_MAX_COLS = 256
 
 _TMP_PREFIX = ".tmp_"
 _STALE_TMP_AGE_SEC = 60
-# 主线程（关闭窗口 / 清空输出）和工作线程（逐行自动保存）都会写盘，串行化避免互相踩临时文件
 _WRITE_LOCK = threading.Lock()
 
 _TXT_DELIMITERS = ",\t;|"
@@ -45,11 +44,6 @@ def _remove_quietly(path: str) -> None:
 
 
 def sweep_stale_temp_files(path: str) -> int:
-    """清掉数据文件旁边遗留的写盘临时文件（上次崩溃/强杀留下的）。
-
-    只删前缀和扩展名都匹配、且超过 _STALE_TMP_AGE_SEC 没被动过的文件，
-    以免误删另一个实例正在写的临时文件。
-    """
     ext = os.path.splitext(path)[1].lower()
     dir_name = os.path.dirname(path) or "."
     try:
@@ -80,8 +74,6 @@ def read_data_file(path: str) -> Tuple[pd.DataFrame, str]:
         except (OSError, ValueError):
             raise
         except Exception as exc:
-            # 损坏/加密等异常类型（如 zipfile.BadZipFile、XLRDError）统一转成
-            # 上层能友好提示的 ValueError，避免变成“程序错误”弹窗
             raise ValueError(f"无法读取 Excel 文件：{exc}") from exc
 
     last_error: Exception | None = None
@@ -96,13 +88,11 @@ def read_data_file(path: str) -> Tuple[pd.DataFrame, str]:
             last_error = exc
             logger.debug("Failed to read %s with encoding %s", path, enc, exc_info=True)
 
-    raise RuntimeError(f"Encoding not recognized for {path}.") from last_error
+    detail = f"：{last_error}" if last_error else ""
+    raise ValueError(f"无法读取数据文件：{path}{detail}") from last_error
 
 
 def _read_txt_file(path: str, encoding: str) -> pd.DataFrame:
-    """读取 .txt：只有能明确判定为“分隔符表格”时才按表格读，
-    否则按“每行一个单元格”读，避免把单行内容当成表头导致 0 行，
-    以及把含逗号的普通文本误拆成多列。"""
     delimiter = _sniff_txt_delimiter(path, encoding)
     if delimiter and _txt_fields_consistent(path, encoding, delimiter):
         try:
@@ -127,7 +117,6 @@ def _sniff_txt_delimiter(path: str, encoding: str) -> str | None:
 
 
 def _txt_fields_consistent(path: str, encoding: str, delimiter: str) -> bool:
-    """每行字段数一致才认为是表格；普通文本各行逗号数通常不一致。"""
     try:
         with open(path, encoding=encoding, newline="") as f:
             reader = csv.reader(f, delimiter=delimiter)
@@ -177,7 +166,6 @@ def _coerce_xls_value(
 
 
 def _write_legacy_xls(df: pd.DataFrame, path: str, source_path: str | None = None) -> None:
-    """写 .xls。source_path 存在时保留其他 sheet 的数据（格式/公式不保留）。"""
     if xlwt is None:
         raise ImportError("Writing .xls files requires xlwt.")
     if len(df.columns) > _XLS_MAX_COLS:
@@ -272,8 +260,6 @@ def _fill_excel_sheet(ws, df: pd.DataFrame) -> None:
 
 
 def _write_excel_preserving_sheets(df: pd.DataFrame, source_path: str, tmp_path: str, ext: str) -> None:
-    """xlsx/xlsm 保存时尽量保留原工作簿的其他 sheet（以及 .xlsm 的宏），
-    只替换第一个 sheet 的数据。原文件无法读取时回退为重建单 sheet 工作簿。"""
     try:
         import openpyxl
     except ImportError:
@@ -328,6 +314,4 @@ def write_data_file(df: pd.DataFrame, path: str, encoding: str) -> None:
             logger.error("Failed to write data file: %s", path, exc_info=True)
             raise
         finally:
-            # 成功时 os.replace 已把临时文件改走，这里是空操作；
-            # 任何异常路径（含 KeyboardInterrupt 等非 _WRITE_EXCEPTIONS）都不会留下残留
             _remove_quietly(tmp_path)

@@ -139,7 +139,6 @@ class Actions:
 
 
 def _merge_runs(parts: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """合并相邻的同 tag 片段，减少 Text 插入次数。"""
     merged: list[tuple[str, str]] = []
     for tag, chunk in parts:
         if merged and merged[-1][0] == tag:
@@ -151,12 +150,13 @@ def _merge_runs(parts: list[tuple[str, str]]) -> list[tuple[str, str]]:
 
 class AppView:
     STREAM_FLUSH_INTERVAL_MS = 120
-    MAX_LOG_LINES = 200        # 超出后丢弃最旧的行，长批处理下不至于卡顿
-    MAX_OUTPUT_LINES = 4000     # 流式结果的保护上限
-    MAX_WIDGET_CHARS = 400_000  # Text 内容字符上限，兜住「一行超长」的情况
-    MAX_PENDING_CHARS = 64_000  # 待刷新缓冲区上限，UI 刷不过来时丢最旧的而不是无限堆积
-    MAX_FILTER_ROWS = 5         # 筛选条件行数上限，再多就该去 Excel 里筛了
-    TREE_INSERT_BATCH = 2_000   # 大表逐批插入，每批之间刷新一次空闲事件，避免窗口假死
+    MAX_LOG_LINES = 200
+    FOLLOW_BOTTOM_MARGIN_LINES = 6
+    MAX_OUTPUT_LINES = 4000
+    MAX_WIDGET_CHARS = 400_000
+    MAX_PENDING_CHARS = 64_000
+    MAX_FILTER_ROWS = 5
+    TREE_INSERT_BATCH = 2_000
 
     def __init__(self, root: tk.Tk, model_specs, default_model_id: str) -> None:
         self.root = root
@@ -182,7 +182,6 @@ class AppView:
         self._row_status: dict[int, str] = {}
         self._known_columns: list[str] = []
         self._actions: Actions | None = None
-        # 模型 label 可能重复（dict 会后者覆盖前者），显示时给重名加后缀
         self._model_labels: list[str] = []
         self._model_label_to_id: dict[str, str] = {}
         used_labels: set[str] = set()
@@ -204,7 +203,6 @@ class AppView:
             if effort:
                 self._model_reasoning_default[spec.model_id] = str(effort)
 
-        # 窗口已被 run() 隐藏，这里再叠一层透明度，避免个别环境 deiconify 后仍有一帧空白
         self._revealed = False
         try:
             self.root.attributes("-alpha", 0.0)
@@ -212,7 +210,7 @@ class AppView:
             pass
 
         self._build_ui(default_model_id)
-        self.root.after(600, self._reveal)  # 兜底：布局迟迟不就绪也别一直不出来
+        self.root.after(600, self._reveal)
 
     def _reveal(self) -> None:
         if self._revealed:
@@ -260,7 +258,6 @@ class AppView:
         main.columnconfigure(0, weight=1)
         main.rowconfigure(0, weight=1)
 
-        # 上半区左右分栏，右栏再上下分为「提示词 / 日志」；结果独占底部整宽。
         workspace = self._make_paned(main, tk.VERTICAL)
         workspace.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8, 0))
         self.workspace_paned = workspace
@@ -340,7 +337,7 @@ class AppView:
         self.btn_filter.pack(side=tk.RIGHT, padx=(4, 4))
 
         self.add_filter_row()
-        bar.grid_remove()  # 默认收起，点工具栏「筛选」才展开
+        bar.grid_remove()
         self._filter_visible = False
 
     def add_filter_row(self, after: "_FilterRow | None" = None) -> None:
@@ -358,13 +355,11 @@ class AppView:
 
     def remove_filter_row(self, row: "_FilterRow") -> None:
         if len(self._filter_rows) <= 1:
-            row.reset()  # 只剩一行就不删了，清空内容即可
+            row.reset()
             return
         self._filter_rows.remove(row)
         row.destroy()
         self._sync_filter_row_buttons()
-        # 不在这里重跑筛选：全表扫描 + 重建表格会让删除明显卡顿，
-        # 而且加条件时也不会立即生效，交给「筛选」按钮统一应用
 
     def _sync_filter_row_buttons(self) -> None:
         single = len(self._filter_rows) <= 1
@@ -382,7 +377,6 @@ class AppView:
             self.filter_bar.grid_remove()
 
     def set_filter_active(self, active: bool) -> None:
-        """有筛选生效时把工具栏按钮点亮，收起筛选条也能看出当前是子集。"""
         def _apply() -> None:
             self.btn_filter_toggle.set_kind("primary" if active else "ghost")
 
@@ -402,7 +396,6 @@ class AppView:
             self._actions.on_filter_reset()
 
     def get_filters(self) -> list[tuple[str, str, str]]:
-        """返回每行的 (列名, 条件 key, 匹配文本)。"""
         return [row.value() for row in self._filter_rows]
 
     def get_filter_join(self) -> str:
@@ -451,7 +444,6 @@ class AppView:
         tk.Label(row, text="输出到", font=FONTS["small"], fg=COLORS["text_muted"], bg=COLORS["surface"]).pack(side=tk.LEFT)
         self.output_col_var = tk.StringVar()
         self.output_hint_var = tk.StringVar()
-        # 不在下拉列表里的名字视为新列，运行时自动建
         tk.Label(
             row, textvariable=self.output_hint_var, font=FONTS["small"], fg=COLORS["accent"], bg=COLORS["surface"]
         ).pack(side=tk.RIGHT, padx=(6, 0))
@@ -596,7 +588,6 @@ class AppView:
             self.btn_filter_toggle.config(state=tk.NORMAL if file_loaded else tk.DISABLED)
             self.model_cb.config(state="readonly")
             self.reasoning_cb.config(state="readonly")
-            # normal 而非 readonly：允许直接敲一个新列名
             self.output_col_cb.config(state="normal" if file_loaded else tk.DISABLED)
             self.filter_join_cb.config(state="readonly" if file_loaded else tk.DISABLED)
             for button in (self.btn_filter, self.btn_filter_reset):
@@ -630,7 +621,6 @@ class AppView:
         self.ui(_apply)
 
     def set_loading_state(self, loading: bool) -> None:
-        """读取大文件期间禁用交互，避免界面停在「就绪」看起来像卡死。"""
         def _apply() -> None:
             if loading:
                 for widget in (self.btn_open, self.btn_filter_toggle, self.btn_insert_col,
@@ -681,7 +671,6 @@ class AppView:
         return self.reasoning_var.get().strip()
 
     def update_reasoning_for_model(self, model_id: str) -> None:
-        """模型切换时刷新可选的推理强度，保留仍在选项里的当前选择。"""
         options = list(self._model_reasoning_options.get(model_id) or [])
         fallback = self._model_reasoning_default.get(model_id, "")
         current = self.reasoning_var.get()
@@ -691,7 +680,6 @@ class AppView:
         self.reasoning_var.set(current)
 
     def get_row_delay(self) -> float:
-        """行间停顿秒数；非法输入按 0（不停顿）处理。"""
         try:
             seconds = float(self.delay_var.get().strip())
         except (TypeError, ValueError):
@@ -745,7 +733,6 @@ class AppView:
         for index, (idx, values) in enumerate(rows):
             self.tree.insert("", tk.END, iid=str(idx), text=str(idx + 1), values=values, tags=(self._row_tag(idx),))
             if index % self.TREE_INSERT_BATCH == self.TREE_INSERT_BATCH - 1:
-                # 让 Tk 有机会处理绘制等空闲任务，窗口不会在长渲染里完全无响应
                 self.tree.update_idletasks()
 
     def update_tree_row(self, idx: int, values: list[str]) -> None:
@@ -786,11 +773,6 @@ class AppView:
         return sorted({int(iid) for iid in self.tree.selection()})
 
     def focus_row(self, idx: int) -> None:
-        """只滚动到该行，不改选中态。
-
-        运行中的行本来就有底色标记，再去 selection_set 会把用户的选择覆盖掉：
-        跑完后选中态停在最后一行，「未处理」会以它为起点，导致前面失败的行被跳过。
-        """
 
         def _apply() -> None:
             iid = str(idx)
@@ -834,7 +816,6 @@ class AppView:
     def _fit_dialog(
         self, top: tk.Toplevel, text: tk.Text, value: str, x: int | None = None, y: int | None = None
     ) -> None:
-        """按内容自适应弹窗宽高：短内容小窗、长内容封顶，避免固定尺寸留大片空白。"""
         try:
             font = tkfont.Font(font=FONTS["mono"])
             line_h = font.metrics("linespace")
@@ -860,7 +841,6 @@ class AppView:
             line_px = len(longest) * 8
         width = max(min_w, min(int(line_px) + 58, max_w))
 
-        # 隐藏期间无法计算真实折行，先按物理行数估算，映射后再校正
         chrome = 12 + 20 + 28 + 10 + 31
         height = max(min_h, min(int((value.count("\n") + 1) * line_h + chrome), max_h))
         top.geometry(f"{width}x{height}{pos}")
@@ -931,9 +911,6 @@ class AppView:
 
     @classmethod
     def _trim(cls, widget: tk.Text, max_lines: int) -> None:
-        """滚动窗口式截断。字符上限是为了兜住流式推理那种「一行几十万字」的内容——
-        只按行数截断时，这种内容行数始终为 1，永远不会被裁掉。
-        """
         line_count = int(widget.index("end-1c").split(".")[0])
         if line_count > max_lines:
             widget.delete("1.0", f"{line_count - max_lines + 1}.0")
@@ -983,7 +960,7 @@ class AppView:
             self._log_flush_scheduled = False
         if not pending and not dropped:
             return
-        follow = self._is_at_bottom(self.system_log)
+        follow = self._is_near_bottom(self.system_log)
         if dropped:
             self.system_log.insert(tk.END, f"[日志过多，已丢弃 {dropped} 段旧内容]\n", "error")
         for tag, chunk in _merge_runs(pending):
@@ -993,10 +970,16 @@ class AppView:
             self.system_log.yview_moveto(1.0)
 
     @staticmethod
-    def _is_at_bottom(widget) -> bool:
-        """滚动条已在最底部时才自动跟随，用户上翻时不打断阅读。"""
+    def _is_near_bottom(widget) -> bool:
         try:
-            return widget.yview()[1] >= 0.999
+            height = widget.winfo_height()
+            if height <= 1:
+                return True
+            bottom = widget.index(f"@{0},{height}")
+            gap = widget.count(bottom, "end-1c", "displaylines")
+            if isinstance(gap, (tuple, list)):
+                gap = gap[0]
+            return gap <= AppView.FOLLOW_BOTTOM_MARGIN_LINES
         except tk.TclError:
             return True
 

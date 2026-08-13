@@ -37,10 +37,8 @@ logger = logging.getLogger(__name__)
 
 RUN_START_MESSAGE = ">>> 开始运行 <<<\n"
 
-# 表里没有现成的输出列时，预填这个名字，运行时自动建列
 DEFAULT_OUTPUT_COLUMN = "提取结果"
 
-# 大表格自动保存节流：逐行整文件重写太慢，攒够行数或时间再落盘一次
 _AUTOSAVE_ROW_INTERVAL = 20
 _AUTOSAVE_TIME_INTERVAL = 5.0
 _LARGE_BATCH_ROWS = 500
@@ -89,7 +87,6 @@ class App:
         self.input_cols: list[str] = []
         self.output_col = "Answer"
         self.model_id = DEFAULT_MODEL_ID
-        # None = 未筛选；否则是当前可见（也就是允许运行）的行号
         self.filtered_indices: list[int] | None = None
         self.run_state = RunState()
         self.llm = LLMClient()
@@ -108,7 +105,6 @@ class App:
         return [format_cell(self.df.at[idx, col]) for col in self.display_columns]
 
     def _all_row_values(self) -> list[list[str]]:
-        """整表一次性向量化取展示字符串，替代逐格 df.at（大表下这是主要卡顿源）。"""
         if self.df is None or not self.display_columns:
             return []
         block = self.df.loc[:, self.display_columns].fillna("").astype(str)
@@ -163,7 +159,7 @@ class App:
             if not col or col not in self.df.columns:
                 continue
             if cond in _TEXT_CONDITIONS and not needle:
-                continue  # 条件填了一半就忽略这行，不打断输入
+                continue
             rules.append((col, cond, needle))
 
         if not rules:
@@ -291,7 +287,8 @@ class App:
                 self.view.log(f"已清理 {swept} 个遗留的临时文件。\n")
             self.view.set_status("已载入文件")
             self.view.set_idle_state(True)
-        except (RuntimeError, ValueError, OSError) as exc:
+        except Exception as exc:
+            logger.exception("Failed to load data file: %s", filepath)
             self.view.set_status("载入失败")
             messagebox.showerror("错误", f"载入文件失败：\n{exc}")
         finally:
@@ -344,6 +341,7 @@ class App:
             write_data_file(self.df, self.file_path, self.file_encoding)
             self.run_state.pending_save_count = 0
         except Exception as exc:
+            logger.exception("Failed to persist data file: %s", self.file_path)
             self.view.log(f"[错误] 保存文件失败：{exc}\n", "error")
 
     def _get_processed_mask(self):
@@ -380,7 +378,7 @@ class App:
             self.view.show_output_text("")
             return
         value = self.df.at[idx, output_col]
-        self.view.show_output_text("" if pd.isna(value) else str(value))
+        self.view.show_output_text(format_cell(value))
 
     def _request_stop(self) -> None:
         if not self.run_state.is_running:
@@ -430,8 +428,6 @@ class App:
         self.root.destroy()
 
     def _schedule_close_after_run(self, deadline: float) -> None:
-        """保持主循环运转，等当前行收尾（工作线程依赖主循环做界面更新），
-        完成后由主线程做最后一次保存再退出，避免与工作线程并发写 DataFrame。"""
         if self.run_state.is_running and time.monotonic() < deadline:
             self.root.after(100, lambda: self._schedule_close_after_run(deadline))
             return
@@ -480,7 +476,6 @@ class App:
     def _collect_task_indices(self, mode: str, selected: list[int]) -> list[int]:
         if self.df is None:
             return []
-        # 筛选后所有运行范围都只在可见行里取，跟表格显示保持一致
         allowed = set(self._visible_indices())
         if mode == "unprocessed":
             start = selected[0] if selected else None
@@ -500,12 +495,11 @@ class App:
             return self._visible_indices()
         if not selected:
             messagebox.showinfo("提示", "请先在表格中选择要处理的行。")
-        return selected
+        return [i for i in selected if i in allowed]
 
     def _snapshot_batch_items(self, indices: list[int], run_config: RunConfig) -> list[BatchItem]:
         if self.df is None:
             return []
-        # 只需提示词实际引用的列：向量化取数，避免对整表逐行逐格 df.at
         needed_cols = sorted(
             {
                 col
@@ -622,7 +616,6 @@ class App:
     def _start_extraction(self, mode: str = "selected") -> None:
         if self.df is None:
             return
-        # 新建列会重建表格并清掉选中态，先把选中行取出来
         selected = self.view.get_selected_indices()
         run_config = self._build_run_config()
         if not self._validate_columns(run_config):
@@ -657,8 +650,6 @@ class App:
                 self.view.log(f"行间停顿 {row_delay:g} 秒。\n")
             threading.Thread(target=self._run_batch, args=(items, run_config, row_delay), daemon=True).start()
         except Exception as exc:
-            # 线程还没起来就出错的话必须把运行态收回来，
-            # 否则界面会一直卡在「停止」上，只能重开程序
             logger.exception("Failed to start batch")
             self.run_state.is_running = False
             self.view.log(f"[错误] 启动失败：{exc}\n", "error")
@@ -728,7 +719,6 @@ class App:
             self._finish_batch(had_unexpected_error, time.monotonic() - started_at)
 
     def _sleep_interruptible(self, seconds: float) -> None:
-        """行间停顿：分段小睡，随时响应“停止”。"""
         deadline = time.monotonic() + seconds
         while not self.run_state.stop_requested:
             remaining = deadline - time.monotonic()

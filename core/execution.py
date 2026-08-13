@@ -14,17 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 def _describe(exc: Exception) -> str:
-    """SDK 的连接类异常常常 str() 为空，只留类名也比一片空白强。"""
     text = str(exc).strip()
     return f"{type(exc).__name__}: {text}" if text else type(exc).__name__
 
 
 class NonRetryableProcessingError(RuntimeError):
-    """Raised when retrying the current row would not help."""
+    pass
 
 
 class RetryableProcessingError(RuntimeError):
-    """Raised when retrying the current row may succeed."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -48,7 +47,6 @@ _WHITESPACE_RE = re.compile(r"\s+")
 
 
 def get_placeholder_columns(question: str) -> list[str]:
-    """提示词中引用的列名（去首尾空白），用于按需取列。"""
     return [name.strip() for name in _PLACEHOLDER_RE.findall(question)]
 
 
@@ -57,10 +55,6 @@ def build_input_text(
     row_data: dict[str, str],
     input_cols: list[str],
 ) -> str:
-    """拼装发给 LLM 的最终文本。
-
-    提示词含 ``{{列名}}`` 占位符时按占位符替换；否则把选中列的值追加在提示词之后。
-    """
     placeholders = _PLACEHOLDER_RE.findall(question)
 
     if placeholders:

@@ -13,11 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 def _base_dir() -> Path:
-    """打包后取 exe 所在目录，源码运行取项目根目录。
-
-    onefile 模式下 __file__ 指向临时解压目录。配置必须放在 exe 旁边，
-    使用者才能填自己的 API Key，而不是被打进 exe 里跟着分发出去。
-    """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent.parent
@@ -30,18 +25,12 @@ CONFIG_FILE_ENCODING = "utf-8-sig"
 
 
 def resource_path(name: str) -> Path:
-    """随程序一起打包的只读资源（图标等）。
-
-    与 config.local.json 相反：这类文件要打进 exe，onefile 运行时被解压到
-    sys._MEIPASS，所以不能用 exe 所在目录去找。
-    """
     bundle = getattr(sys, "_MEIPASS", "")
     base = Path(bundle) if bundle else Path(__file__).resolve().parent.parent
     return base / name
 
 
 def _read_local_config() -> tuple[dict[str, Any], str]:
-    """返回 (配置内容, 错误说明)。文件不存在不算错误，由上层给出建档提示。"""
     if not LOCAL_CONFIG_PATH.exists():
         return {}, ""
     try:
@@ -62,7 +51,6 @@ def get_local_config() -> dict[str, Any]:
 
 
 def _resolve_int(key: str, default: int) -> int:
-    """环境变量优先，其次 config.local.json，都没有则用默认值。"""
     raw = os.getenv(key) or _LOCAL_CONFIG.get(key)
     if raw in (None, ""):
         return default
@@ -97,7 +85,6 @@ class Settings:
 
 
 def _clamp_int(key: str, value: int, low: int, high: int, default: int) -> int:
-    """配置值越界（如 LLM_TIMEOUT=0 导致所有请求立即超时）时钳制到合法区间。"""
     if not low <= value <= high:
         logger.warning("%s=%s out of range [%s, %s]; using %s.", key, value, low, high, default)
         return default

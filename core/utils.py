@@ -11,7 +11,13 @@ def is_valid_input(value: str) -> bool:
 
 
 def format_cell(value: object) -> str:
-    if pd.isna(value):
+    if isinstance(value, (list, tuple, dict, set)):
+        return str(value)
+    try:
+        missing = pd.isna(value)
+    except (TypeError, ValueError):
+        missing = False
+    if isinstance(missing, bool) and missing:
         return ""
     return str(value)
 
@@ -25,7 +31,6 @@ def guess_output_column(columns: list[str]) -> str | None:
 
 
 def drop_unnamed_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """丢掉 Excel/CSV 引擎带进来的空白 unnamed 列。"""
     drop_cols = []
     index_series = None
     for col in df.columns:
@@ -50,7 +55,6 @@ def drop_unnamed_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
 
 def dedupe_columns(columns: list[str]) -> list[str]:
-    """重名列追加 _1/_2 后缀，避免 df.at 因重复列名返回 Series 导致界面崩溃。"""
     counts: dict[str, int] = {}
     used: set[str] = set()
     result: list[str] = []
