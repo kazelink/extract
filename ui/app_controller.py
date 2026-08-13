@@ -41,7 +41,6 @@ DEFAULT_OUTPUT_COLUMN = "提取结果"
 
 _AUTOSAVE_ROW_INTERVAL = 20
 _AUTOSAVE_TIME_INTERVAL = 5.0
-_LARGE_BATCH_ROWS = 500
 
 _FILTER_DESC = {"nonempty": "非空", "empty": "为空", "contains": "包含", "not_contains": "不包含"}
 _TEXT_CONDITIONS = {"contains", "not_contains"}
@@ -332,17 +331,19 @@ class App:
         except (OSError, TypeError, ValueError) as exc:
             messagebox.showerror("错误", f"保存提示词配置失败：\n{exc}")
 
-    def _persist_dataframe(self, force: bool = False) -> None:
+    def _persist_dataframe(self, force: bool = False) -> bool:
         if self.df is None or self.file_path is None:
-            return
+            return True
         if not force and self.run_state.pending_save_count == 0:
-            return
+            return True
         try:
             write_data_file(self.df, self.file_path, self.file_encoding)
             self.run_state.pending_save_count = 0
+            return True
         except Exception as exc:
             logger.exception("Failed to persist data file: %s", self.file_path)
             self.view.log(f"[错误] 保存文件失败：{exc}\n", "error")
+            return False
 
     def _get_processed_mask(self):
         if self.df is None:
@@ -424,14 +425,21 @@ class App:
             self._schedule_close_after_run(time.monotonic() + wait_seconds)
             return
         self._closing = True
-        self._persist_dataframe(force=True)
+        if not self._persist_dataframe(force=True):
+            self._closing = False
+            messagebox.showerror("保存失败", "数据保存失败，已取消退出。请关闭占用该文件的程序后重试。")
+            return
         self.root.destroy()
 
     def _schedule_close_after_run(self, deadline: float) -> None:
         if self.run_state.is_running and time.monotonic() < deadline:
             self.root.after(100, lambda: self._schedule_close_after_run(deadline))
             return
-        self._persist_dataframe(force=True)
+        if not self._persist_dataframe(force=True):
+            self._closing = False
+            self.view.set_status("保存失败")
+            messagebox.showerror("保存失败", "数据保存失败，已取消退出。请关闭占用该文件的程序后重试。")
+            return
         self.root.destroy()
 
     def _build_run_config(self) -> RunConfig:
@@ -662,7 +670,6 @@ class App:
         had_unexpected_error = False
         started_at = time.monotonic()
         last_save_time = started_at
-        throttle_save = total_items >= _LARGE_BATCH_ROWS
         try:
             for pos, item in enumerate(items, start=1):
                 if self.run_state.stop_requested:
@@ -701,8 +708,7 @@ class App:
                     self._mark_row_status(item.idx, "FAILED", error_message or "未知错误")
                     self.view.log(f"  [失败] 第 {item.idx + 1} 行\n", "error")
                 if (
-                    not throttle_save
-                    or self.run_state.pending_save_count >= _AUTOSAVE_ROW_INTERVAL
+                    self.run_state.pending_save_count >= _AUTOSAVE_ROW_INTERVAL
                     or time.monotonic() - last_save_time >= _AUTOSAVE_TIME_INTERVAL
                 ):
                     self._persist_dataframe()

@@ -144,7 +144,10 @@ class OpenAICompatibleProvider(BaseProvider):
                     parts.append(delta.content)
                     on_stream(delta.content)
         finally:
-            stream.close()
+            try:
+                stream.close()
+            except Exception:
+                pass
         return "".join(parts).strip()
 
     def _handle_sync(self, client: OpenAI, params: dict) -> str | tuple[str, str]:
@@ -152,8 +155,10 @@ class OpenAICompatibleProvider(BaseProvider):
         if not resp.choices:
             return ""
         msg = resp.choices[0].message
+        if msg is None:
+            return ""
         reasoning = self._extract_reasoning(msg)
-        content = (msg.content or "").strip()
+        content = (getattr(msg, "content", None) or "").strip()
         return (reasoning, content) if reasoning else content
 
     @staticmethod

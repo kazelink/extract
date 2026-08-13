@@ -66,5 +66,13 @@ def run() -> None:
         messagebox.showerror("配置错误", str(exc), parent=root)
         root.destroy()
         return
-    App(root)
+    try:
+        App(root)
+    except Exception:
+        logger.exception("Failed to initialize application")
+        try:
+            messagebox.showerror("启动失败", "程序初始化失败。\n详细堆栈已写入日志文件。")
+        finally:
+            root.destroy()
+        return
     root.mainloop()

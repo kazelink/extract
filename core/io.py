@@ -45,6 +45,8 @@ def _remove_quietly(path: str) -> None:
 
 def sweep_stale_temp_files(path: str) -> int:
     ext = os.path.splitext(path)[1].lower()
+    if not ext:
+        return 0
     dir_name = os.path.dirname(path) or "."
     try:
         names = os.listdir(dir_name)
@@ -87,6 +89,9 @@ def read_data_file(path: str) -> Tuple[pd.DataFrame, str]:
         except _READ_EXCEPTIONS as exc:
             last_error = exc
             logger.debug("Failed to read %s with encoding %s", path, enc, exc_info=True)
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Unexpected error reading %s with encoding %s", path, enc, exc_info=True)
 
     detail = f"：{last_error}" if last_error else ""
     raise ValueError(f"无法读取数据文件：{path}{detail}") from last_error
@@ -99,7 +104,7 @@ def _read_txt_file(path: str, encoding: str) -> pd.DataFrame:
             df = pd.read_csv(path, sep=delimiter, encoding=encoding, dtype=str)
             if len(df.columns) > 1 and len(df) >= 1:
                 return df
-        except _READ_EXCEPTIONS:
+        except Exception:
             pass
     return _read_lines_as_single_column(path, encoding)
 
@@ -228,8 +233,8 @@ def _write_legacy_xls(df: pd.DataFrame, path: str, source_path: str | None = Non
                 source_path,
                 exc_info=True,
             )
-            if not first_sheet_added:
-                write_df_sheet(first_sheet_name)
+        if not first_sheet_added:
+            write_df_sheet(first_sheet_name)
     else:
         write_df_sheet(first_sheet_name)
 
@@ -290,19 +295,26 @@ def _write_excel_preserving_sheets(df: pd.DataFrame, source_path: str, tmp_path:
         wb.active = 0
         wb.save(tmp_path)
     finally:
-        wb.close()
         vba_archive = getattr(wb, "vba_archive", None)
+        try:
+            wb.close()
+        except Exception:
+            logger.warning("Failed to close workbook %s", source_path, exc_info=True)
         if vba_archive is not None:
-            vba_archive.close()
+            try:
+                vba_archive.close()
+            except Exception:
+                logger.warning("Failed to close VBA archive %s", source_path, exc_info=True)
 
 
 def write_data_file(df: pd.DataFrame, path: str, encoding: str) -> None:
     ext = os.path.splitext(path)[1].lower()
     dir_name = os.path.dirname(path) or "."
     with _WRITE_LOCK:
-        fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix=_TMP_PREFIX, suffix=ext)
-        os.close(fd)
+        tmp_path: str | None = None
         try:
+            fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix=_TMP_PREFIX, suffix=ext)
+            os.close(fd)
             if ext in _MODERN_EXCEL_EXTS:
                 _write_excel_preserving_sheets(df, path, tmp_path, ext)
             elif ext in _LEGACY_EXCEL_EXTS:
@@ -314,4 +326,5 @@ def write_data_file(df: pd.DataFrame, path: str, encoding: str) -> None:
             logger.error("Failed to write data file: %s", path, exc_info=True)
             raise
         finally:
-            _remove_quietly(tmp_path)
+            if tmp_path is not None:
+                _remove_quietly(tmp_path)

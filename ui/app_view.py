@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import tkinter as tk
 from dataclasses import dataclass
@@ -11,6 +12,9 @@ from core.models import DEFAULT_MODEL_ID
 from .prompt_editor import PromptEditor
 from .theme import COLORS, FONTS, setup_theme
 from .widgets import FlatButton, Panel, SplitButton, make_text_view
+
+
+logger = logging.getLogger(__name__)
 
 
 RUN_MODES: tuple[tuple[str, str], ...] = (
@@ -158,6 +162,16 @@ class AppView:
     MAX_FILTER_ROWS = 5
     TREE_INSERT_BATCH = 2_000
 
+    @staticmethod
+    def _guarded(callback) -> Callable[[], None]:
+        def wrapper() -> None:
+            try:
+                callback()
+            except Exception:
+                logger.exception("Unhandled scheduled UI callback error")
+
+        return wrapper
+
     def __init__(self, root: tk.Tk, model_specs, default_model_id: str) -> None:
         self.root = root
         self.root.title("表格批量提取")
@@ -210,7 +224,7 @@ class AppView:
             pass
 
         self._build_ui(default_model_id)
-        self.root.after(600, self._reveal)
+        self.root.after(1500, self._guarded(self._reveal))
 
     def _reveal(self) -> None:
         if self._revealed:
@@ -225,8 +239,8 @@ class AppView:
     def _apply_initial_geometry(self) -> None:
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
-        width = min(screen_w - 80, 1200)
-        height = min(screen_h - 100, max(700, int(screen_h * 0.86)))
+        width = max(320, min(screen_w - 80, 1200))
+        height = max(480, min(screen_h - 100, max(700, int(screen_h * 0.86))))
         x = max(0, (screen_w - width) // 2)
         y = max(0, (screen_h - height) // 2 - 24)
         self.root.geometry(f"{width}x{height}+{x}+{y}")
@@ -277,7 +291,7 @@ class AppView:
         self._build_result_panel(workspace, default_model_id)
 
         self._build_action_bar(main)
-        self.root.after_idle(self._set_initial_sash_positions)
+        self.root.after_idle(self._guarded(self._set_initial_sash_positions))
 
     def _build_table_panel(self, parent) -> None:
         panel = Panel(parent, "", actions_first=True)
@@ -530,24 +544,34 @@ class AppView:
         self.run_button.set_option("selected")
         self._refresh_run_button()
 
-    def _set_initial_sash_positions(self) -> None:
+    def _set_initial_sash_positions(self, attempts: int = 0) -> None:
         if self._layout_initialized:
             return
+        try:
+            self.root.deiconify()
+            self.root.update_idletasks()
+        except tk.TclError:
+            pass
         width = self.top_paned.winfo_width()
         height = self.workspace_paned.winfo_height()
         if width <= 1 or height <= 1:
-            self.root.after(50, self._set_initial_sash_positions)
+            if attempts < 20:
+                self.root.after(
+                    50, self._guarded(lambda: self._set_initial_sash_positions(attempts + 1))
+                )
+            else:
+                self._reveal()
             return
         self.workspace_paned.sash_place(0, 0, int(height * 0.72))
         self.top_paned.sash_place(0, int(width * 0.7), 0)
         self._layout_initialized = True
-        self.root.after(40, self._place_right_sash)
+        self.root.after(40, self._guarded(self._place_right_sash))
 
     def _place_right_sash(self, attempts: int = 0) -> None:
         height = self.right_paned.winfo_height()
         if height <= 1:
             if attempts < 20:
-                self.root.after(50, lambda: self._place_right_sash(attempts + 1))
+                self.root.after(50, self._guarded(lambda: self._place_right_sash(attempts + 1)))
             else:
                 self._reveal()
             return
@@ -770,7 +794,13 @@ class AppView:
         return self._row_status.get(idx) or ("odd" if idx % 2 else "even")
 
     def get_selected_indices(self) -> list[int]:
-        return sorted({int(iid) for iid in self.tree.selection()})
+        indices: set[int] = set()
+        for iid in self.tree.selection():
+            try:
+                indices.add(int(iid))
+            except (TypeError, ValueError):
+                continue
+        return sorted(indices)
 
     def focus_row(self, idx: int) -> None:
 
@@ -845,11 +875,16 @@ class AppView:
         height = max(min_h, min(int((value.count("\n") + 1) * line_h + chrome), max_h))
         top.geometry(f"{width}x{height}{pos}")
         top.deiconify()
-        self.root.update()
+        self.root.update_idletasks()
         if line_px > width - 58:
             try:
                 counted = text.count("1.0", tk.END, "displaylines")
-                lines = counted[0] if isinstance(counted, tuple) else counted
+                if isinstance(counted, (tuple, list)):
+                    lines = counted[0] if counted else 0
+                else:
+                    lines = counted
+                if not isinstance(lines, int):
+                    return
             except tk.TclError:
                 return
             height = max(min_h, min(int(lines * line_h + chrome), max_h))
@@ -905,7 +940,7 @@ class AppView:
 
     def _schedule_flush(self, callback) -> None:
         try:
-            self.root.after(self.STREAM_FLUSH_INTERVAL_MS, callback)
+            self.root.after(self.STREAM_FLUSH_INTERVAL_MS, self._guarded(callback))
         except tk.TclError:
             pass
 
@@ -978,9 +1013,11 @@ class AppView:
             bottom = widget.index(f"@{0},{height}")
             gap = widget.count(bottom, "end-1c", "displaylines")
             if isinstance(gap, (tuple, list)):
-                gap = gap[0]
-            return gap <= AppView.FOLLOW_BOTTOM_MARGIN_LINES
-        except tk.TclError:
+                gap = gap[0] if gap else 0
+            if isinstance(gap, int):
+                return gap <= AppView.FOLLOW_BOTTOM_MARGIN_LINES
+            return widget.yview()[1] >= 0.999
+        except (tk.TclError, TypeError, IndexError):
             return True
 
     def _copy_output(self) -> None:
@@ -1003,11 +1040,12 @@ class AppView:
         self.ui(_apply)
 
     def ui(self, callback) -> None:
+        guarded = self._guarded(callback)
         try:
             if threading.current_thread() is threading.main_thread():
-                callback()
+                guarded()
             else:
-                self.root.after(0, callback)
+                self.root.after(0, guarded)
         except (tk.TclError, RuntimeError):
             return
 

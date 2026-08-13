@@ -179,7 +179,10 @@ class PromptEditor(ttk.Frame):
 
     def _schedule_refresh(self, _event=None) -> None:
         if self._refresh_job is not None:
-            self.after_cancel(self._refresh_job)
+            try:
+                self.after_cancel(self._refresh_job)
+            except tk.TclError:
+                pass
         self._refresh_job = self.after(self.REFRESH_DELAY_MS, self._refresh)
 
     def _refresh(self, notify: bool = True) -> None:
